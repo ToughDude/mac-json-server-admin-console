@@ -16,20 +16,8 @@
       "status": "success",
       "message": "Role assigned successfully",
       "data": {
-        "writes": [
-          {
-            "subject": {
-              "id": "39B41A6067D7F3680A494216@39b31a6067d7f368494216.e",
-              "type": "user"
-            },
-            "relation": "education/educator",
-            "object": {
-              "id": "38811A2C67D7F3390A49421E@AdobeOrg",
-              "type": "org"
-            },
-            "status": "success"
-          }
-        ]
+        "writes": [],
+        "deletes": []
       }
     }
   },
@@ -37,7 +25,15 @@
     "38811A2C67D7F3390A49421E@AdobeOrg": {
       "admins": {
         "39B41A6067D7F3680A494216@39b31a6067d7f368494216": {
-          "e": {}
+          "e": {
+            "MAC_ROLES": {
+              "education": {
+                "educator": {
+                  "": true
+                }
+              }
+            }
+          }
         }
       }
     }

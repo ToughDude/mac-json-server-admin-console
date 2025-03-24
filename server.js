@@ -29,6 +29,8 @@ const validateBearerToken = (req, res, next) => {
 
 // Apply auth middlewares to admin endpoints
 server.use('/v2/organizations/:orgId/admins', validateApiKey, validateBearerToken);
+server.use('/v2/organizations/:orgId/:type/:id/roles', validateApiKey, validateBearerToken);
+server.use('/v1/admin/clear-db', validateApiKey, validateBearerToken);
 
 // Add custom routes before JSON Server router
 server.post('/v1/permissions/check', (req, res) => {
@@ -91,12 +93,15 @@ server.patch('/v2/organizations/:orgId/admins', (req, res) => {
 
   const results = operations.map(operation => {
     const { op, path } = operation;
-    const guid = path.split('/')[1];
-    const rolePath = path.split('/').slice(2).join('/');
+    // Parse the path: /{guid}/MAC_ROLES/<namespace>/<role>/
+    const parts = path.split('/').filter(Boolean);
+    const guid = parts[0];
+    const namespace = parts[2];
+    const role = parts[3];
 
     if (op === 'add') {
-      // Add the role
-      db.set(`organizations.${orgId}.admins.${guid}.${rolePath}`, true).write();
+      // Add the role with proper structure for GET endpoint
+      db.set(`organizations.${orgId}.admins.${guid}.MAC_ROLES.${namespace}.${role}`, { "": true }).write();
       return {
         op,
         path,
@@ -105,7 +110,7 @@ server.patch('/v2/organizations/:orgId/admins', (req, res) => {
       };
     } else if (op === 'remove') {
       // Remove the role
-      db.unset(`organizations.${orgId}.admins.${guid}.${rolePath}`).write();
+      db.unset(`organizations.${orgId}.admins.${guid}.MAC_ROLES.${namespace}.${role}`).write();
       return {
         op,
         path,
@@ -127,6 +132,117 @@ server.patch('/v2/organizations/:orgId/admins', (req, res) => {
     message: 'Admin roles updated successfully',
     results
   });
+});
+
+// Add GET endpoint for fetching roles
+server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
+  const { orgId, type, id } = req.params;
+  const db = router.db;
+
+  // Validate type parameter
+  if (!['USER', 'GROUP'].includes(type.toUpperCase())) {
+    return res.status(400).json({
+      error_code: 'INVALID_REQUEST',
+      message: 'Invalid type provided. Must be USER or GROUP'
+    });
+  }
+
+  try {
+    // Get roles from the database with correct path structure
+    const rolesPath = `organizations.${orgId}.admins.${id}.MAC_ROLES`;
+    const roles = db.get(rolesPath).value();
+
+    // If no roles found, return empty arrays
+    if (!roles) {
+      return res.json({
+        id,
+        type: type.toLowerCase() === 'user' ? 'users' : 'groups',
+        directRoles: [],
+        inheritedRoles: []
+      });
+    }
+
+    // Transform roles into the required format
+    const directRoles = [];
+    const inheritedRoles = [];
+
+    // Process each namespace and role
+    Object.entries(roles).forEach(([namespace, roleObj]) => {
+      Object.entries(roleObj).forEach(([role, value]) => {
+        if (value && value[""] === true) {
+          directRoles.push({
+            namespace,
+            role
+          });
+        }
+      });
+    });
+
+    // Return the formatted response
+    res.json({
+      id,
+      type: type.toLowerCase() === 'user' ? 'users' : 'groups',
+      directRoles,
+      inheritedRoles
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      error_code: 'INVALID_REQUEST',
+      message: 'Invalid ID provided'
+    });
+  }
+});
+
+// Add endpoint to clear database
+server.post('/v1/admin/clear-db', (req, res) => {
+  const fs = require('fs');
+  
+  // Initial structure for db.json
+  const initialDb = {
+    permissions: {
+      check: {
+        results: {
+          'education/educator': {
+            allowed: false
+          },
+          member: {
+            allowed: true
+          }
+        }
+      }
+    },
+    relations: {
+      write: {
+        status: 'success',
+        message: 'Role assigned successfully',
+        data: {
+          writes: [],
+          deletes: []
+        }
+      }
+    },
+    organizations: {}
+  };
+
+  try {
+    // Write the initial structure to db.json
+    fs.writeFileSync('db.json', JSON.stringify(initialDb, null, 2));
+    
+    // Reload the database in json-server
+    router.db.read();
+    
+    res.json({
+      status: 'success',
+      message: 'Database cleared and initialized with default structure'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to clear database',
+      error: error.message
+    });
+  }
 });
 
 // Use default router
