@@ -9,6 +9,13 @@ server.use(middlewares);
 
 server.use(bodyParser.json());
 
+// Add x-request-id middleware
+server.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || 'default-request-id';
+  res.setHeader('x-request-id', requestId);
+  next();
+});
+
 // API Key validation middleware
 const validateApiKey = (req, res, next) => {
   const apiKey = req.headers['x-api-key'];
@@ -31,6 +38,7 @@ const validateBearerToken = (req, res, next) => {
 server.use('/v2/organizations/:orgId/admins', validateApiKey, validateBearerToken);
 server.use('/v2/organizations/:orgId/:type/:id/roles', validateApiKey, validateBearerToken);
 server.use('/v1/admin/clear-db', validateApiKey, validateBearerToken);
+server.use('/v2/organizations/:orgId/roles/:namespace/:role', validateApiKey, validateBearerToken);
 
 // Add custom routes before JSON Server router
 server.post('/v1/permissions/check', (req, res) => {
@@ -222,7 +230,23 @@ server.post('/v1/admin/clear-db', (req, res) => {
         }
       }
     },
-    organizations: {}
+    organizations: {
+      "38811A2C67D7F3390A49421E@AdobeOrg": {
+        "admins": {
+          "39B41A6067D7F3680A494216@39b31a6067d7f368494216": {
+            "e": {
+              "MAC_ROLES": {
+                "education": {
+                  "educator": {
+                    "": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   };
 
   try {
@@ -240,6 +264,238 @@ server.post('/v1/admin/clear-db', (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to clear database',
+      error: error.message
+    });
+  }
+});
+
+// Add GET endpoint for fetching roles with filtering
+server.get('/v2/organizations/:orgId/roles', (req, res) => {
+  const { orgId } = req.params;
+  const { 
+    filter_include_namespace,
+    page = 0,
+    page_size = 10,
+    search_query = '',
+    sort = '',
+    sort_order = 'asc'
+  } = req.query;
+  const db = router.db;
+
+  try {
+    // Validate organization ID
+    if (!orgId) {
+      return res.status(400).json({
+        error_code: 'INVALID_REQUEST',
+        message: 'Organization ID is required'
+      });
+    }
+
+    // Check if organization exists
+    const organization = db.get(`organizations.${orgId}`).value();
+    if (!organization) {
+      return res.status(404).json({
+        error_code: 'NOT_FOUND',
+        message: `Organization with ID ${orgId} not found`
+      });
+    }
+
+    // Validate filter_include_namespace if provided
+    if (filter_include_namespace && !['education', 'default'].includes(filter_include_namespace)) {
+      return res.status(400).json({
+        error_code: 'INVALID_REQUEST',
+        message: 'Invalid namespace filter. Must be either "education" or "default"'
+      });
+    }
+
+    // Explicitly throw 500 error for testing
+    // if (req.query.forceError === 'true') {
+    //   throw new Error('Forced server error for testing');
+    // }
+
+    // Get all admin roles from the database
+    const admins = db.get(`organizations.${orgId}.admins`).value() || {};
+    
+    // Initialize counters for roles with default values
+    const roleCounts = {
+      education: {
+        educator: { users: 80, groups: 2 },  // Default values
+        member: { users: 0, groups: 0 }      // Default values for member role
+      },
+      default: {
+        member: { users: 1200, groups: 8 }  // Default values
+      }
+    };
+
+    // Count users and groups for each role
+    Object.values(admins).forEach(admin => {
+      if (admin.e && admin.e.MAC_ROLES) {
+        Object.entries(admin.e.MAC_ROLES).forEach(([namespace, roles]) => {
+          Object.entries(roles).forEach(([role, value]) => {
+            if (value && value[""] === true) {
+              if (roleCounts[namespace] && roleCounts[namespace][role]) {
+                roleCounts[namespace][role].users++;
+              }
+            }
+          });
+        });
+      }
+    });
+
+    // Format response based on filter
+    let response = [];
+    
+    // Add education namespace if not filtered or if explicitly included
+    if (!filter_include_namespace || filter_include_namespace === 'education') {
+      response.push({
+        namespace: "education",
+        description: "Roles related to content creation and modification.",
+        roles: [
+          {
+            name: "educator",
+            code: "educator",
+            description: "Can create, edit, and delete classrooms.",
+            userCount: roleCounts.education.educator.users,
+            userGroupCount: roleCounts.education.educator.groups,
+            isVisible: true
+          },
+          {
+            name: "member",
+            code: "member",
+            description: "Member of education organization",
+            userCount: roleCounts.education.member.users,
+            userGroupCount: roleCounts.education.member.groups,
+            isVisible: true
+          }
+        ]
+      });
+    }
+
+    // Add default namespace if not filtered
+    if (!filter_include_namespace) {
+      response.push({
+        namespace: "default",
+        description: "Roles related to organization.",
+        roles: [
+          {
+            name: "member",
+            code: "member",
+            description: "Member of org",
+            userCount: roleCounts.default.member.users,
+            userGroupCount: roleCounts.default.member.groups,
+            isVisible: true
+          }
+        ]
+      });
+    }
+
+    // Apply search filter if search_query is provided
+    if (search_query) {
+      const query = search_query.toLowerCase();
+      response = response.map(namespace => ({
+        ...namespace,
+        roles: namespace.roles.filter(role => 
+          role.name.toLowerCase().includes(query) ||
+          role.description.toLowerCase().includes(query)
+        )
+      })).filter(namespace => namespace.roles.length > 0);
+    }
+
+    // Apply sorting if sort parameter is provided
+    if (sort) {
+      response.forEach(namespace => {
+        namespace.roles.sort((a, b) => {
+          const aValue = a[sort];
+          const bValue = b[sort];
+          const order = sort_order === 'desc' ? -1 : 1;
+          
+          if (typeof aValue === 'string' && typeof bValue === 'string') {
+            return order * aValue.localeCompare(bValue);
+          }
+          return order * (aValue - bValue);
+        });
+      });
+    }
+
+    // Calculate pagination
+    const startIndex = parseInt(page) * parseInt(page_size);
+    const endIndex = startIndex + parseInt(page_size);
+    const totalItems = response.reduce((acc, namespace) => acc + namespace.roles.length, 0);
+    const totalPages = Math.ceil(totalItems / parseInt(page_size));
+    const currentPage = parseInt(page);
+    const hasNextPage = currentPage < totalPages - 1;
+    const nextPage = hasNextPage ? currentPage + 1 : null;
+
+    // Apply pagination to roles within each namespace
+    response = response.map(namespace => ({
+      ...namespace,
+      roles: namespace.roles.slice(startIndex, endIndex)
+    })).filter(namespace => namespace.roles.length > 0);
+
+    // Set all required headers with correct casing
+    res.setHeader('Access-Control-Expose-Headers', 
+      'X-Current-Page, X-Has-Next-Page, X-Next-Page, X-Page-Count, X-Page-Size, X-Total-Count, X-Request-Id, X-Debug-Facade-Endpoint-Matched');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Expires', '-1');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Current-Page', currentPage);
+    res.setHeader('X-Has-Next-Page', hasNextPage);
+    res.setHeader('X-Next-Page', nextPage);
+    res.setHeader('X-Page-Count', totalPages);
+    res.setHeader('X-Page-Size', parseInt(page_size));
+    res.setHeader('X-Total-Count', totalItems);
+    res.setHeader('X-Request-Id', req.headers['x-request-id'] || 'default-request-id');
+    res.setHeader('X-Debug-Facade-Endpoint-Matched', 'jil-orgs');
+
+    // Return response with correct structure - no nested data
+    res.json(response);
+
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'SERVER_ERROR',
+      message: 'Failed to fetch roles',
+      error: error.message
+    });
+  }
+});
+
+// Add DELETE endpoint for removing a role
+server.delete('/v2/organizations/:orgId/roles/:namespace/:role', (req, res) => {
+  const { orgId, namespace, role } = req.params;
+  const db = router.db;
+
+  try {
+    // Get all admins
+    const admins = db.get(`organizations.${orgId}.admins`).value() || {};
+    
+    // Track if any role was removed
+    let roleRemoved = false;
+
+    // Remove the role from all admins
+    Object.entries(admins).forEach(([adminId, admin]) => {
+      if (admin.e && admin.e.MAC_ROLES && admin.e.MAC_ROLES[namespace] && admin.e.MAC_ROLES[namespace][role]) {
+        db.unset(`organizations.${orgId}.admins.${adminId}.e.MAC_ROLES.${namespace}.${role}`).write();
+        roleRemoved = true;
+      }
+    });
+
+    if (roleRemoved) {
+      res.json({
+        status: 'success',
+        message: `Role ${role} in namespace ${namespace} removed successfully`
+      });
+    } else {
+      res.status(404).json({
+        status: 'error',
+        message: `Role ${role} in namespace ${namespace} not found`
+      });
+    }
+
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to remove role',
       error: error.message
     });
   }
