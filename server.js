@@ -351,22 +351,22 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
         namespace: "education",
         description: "Roles related to content creation and modification.",
         roles: [
-          {
-            name: "educator",
-            code: "educator",
-            description: "Can create, edit, and delete classrooms.",
-            userCount: roleCounts.education.educator.users,
-            userGroupCount: roleCounts.education.educator.groups,
-            isVisible: true
-          },
-          {
-            name: "member",
-            code: "member",
-            description: "Member of education organization",
-            userCount: roleCounts.education.member.users,
-            userGroupCount: roleCounts.education.member.groups,
-            isVisible: true
-          }
+          // {
+          //   name: "educator",
+          //   code: "educator",
+          //   description: "Can create, edit, and delete classrooms.",
+          //   userCount: roleCounts.education.educator.users,
+          //   userGroupCount: roleCounts.education.educator.groups,
+          //   isVisible: true
+          // },
+          // {
+          //   name: "member",
+          //   code: "member",
+          //   description: "Member of education organization",
+          //   userCount: roleCounts.education.member.users,
+          //   userGroupCount: roleCounts.education.member.groups,
+          //   isVisible: true
+          // }
         ]
       });
     }
@@ -418,12 +418,14 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     }
 
     // Calculate pagination
-    const startIndex = parseInt(page) * parseInt(page_size);
-    const endIndex = startIndex + parseInt(page_size);
+    const pageNum = parseInt(page) || 1; // Default to 1 if not provided
+    const pageSize = parseInt(page_size);
+    const startIndex = (pageNum - 1) * pageSize; // Adjust for 1-based pagination
+    const endIndex = startIndex + pageSize;
     const totalItems = response.reduce((acc, namespace) => acc + namespace.roles.length, 0);
-    const totalPages = Math.ceil(totalItems / parseInt(page_size));
-    const currentPage = parseInt(page);
-    const hasNextPage = currentPage < totalPages - 1;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const currentPage = pageNum;
+    const hasNextPage = currentPage < totalPages;
     const nextPage = hasNextPage ? currentPage + 1 : null;
 
     // Apply pagination to roles within each namespace
@@ -443,7 +445,7 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     res.setHeader('X-Has-Next-Page', hasNextPage);
     res.setHeader('X-Next-Page', nextPage);
     res.setHeader('X-Page-Count', totalPages);
-    res.setHeader('X-Page-Size', parseInt(page_size));
+    res.setHeader('X-Page-Size', pageSize);
     res.setHeader('X-Total-Count', totalItems);
     res.setHeader('X-Request-Id', req.headers['x-request-id'] || 'default-request-id');
     res.setHeader('X-Debug-Facade-Endpoint-Matched', 'jil-orgs');
