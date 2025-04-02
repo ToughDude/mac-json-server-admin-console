@@ -319,11 +319,11 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     // Initialize counters for roles with default values
     const roleCounts = {
       education: {
-        educator: { users: 80, groups: 2 },  // Default values
-        member: { users: 0, groups: 0 }      // Default values for member role
+        educator: { users: 80, groups: 2 },
+        member: { users: 1200, groups: 8 }
       },
-      default: {
-        member: { users: 1200, groups: 8 }  // Default values
+      organization: {
+        member: { users: 1200, groups: 8 }
       }
     };
 
@@ -349,41 +349,29 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     if (!filter_include_namespace || filter_include_namespace === 'education') {
       response.push({
         namespace: "education",
-        description: "Roles related to content creation and modification.",
         roles: [
-          // {
-          //   name: "educator",
-          //   code: "educator",
-          //   description: "Can create, edit, and delete classrooms.",
-          //   userCount: roleCounts.education.educator.users,
-          //   userGroupCount: roleCounts.education.educator.groups,
-          //   isVisible: true
-          // },
-          // {
-          //   name: "member",
-          //   code: "member",
-          //   description: "Member of education organization",
-          //   userCount: roleCounts.education.member.users,
-          //   userGroupCount: roleCounts.education.member.groups,
-          //   isVisible: true
-          // }
+          {
+            code: "educator",
+            description: "Can create, edit, and delete classrooms.",
+            userCount: roleCounts.education.educator.users,
+            userGroupCount: roleCounts.education.educator.groups,
+            visible: true
+          }
         ]
       });
     }
 
-    // Add default namespace if not filtered
-    if (!filter_include_namespace) {
+    // Add organization namespace if not filtered
+    if (!filter_include_namespace || filter_include_namespace === 'organization') {
       response.push({
-        namespace: "default",
-        description: "Roles related to organization.",
+        namespace: "organization",
         roles: [
           {
-            name: "member",
             code: "member",
             description: "Member of org",
-            userCount: roleCounts.default.member.users,
-            userGroupCount: roleCounts.default.member.groups,
-            isVisible: true
+            userCount: roleCounts.organization.member.users,
+            userGroupCount: roleCounts.organization.member.groups,
+            visible: true
           }
         ]
       });
@@ -393,9 +381,9 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     if (search_query) {
       const query = search_query.toLowerCase();
       response = response.map(namespace => ({
-        ...namespace,
+        namespace: namespace.namespace,
         roles: namespace.roles.filter(role => 
-          role.name.toLowerCase().includes(query) ||
+          role.code.toLowerCase().includes(query) ||
           role.description.toLowerCase().includes(query)
         )
       })).filter(namespace => namespace.roles.length > 0);
@@ -430,7 +418,7 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
 
     // Apply pagination to roles within each namespace
     response = response.map(namespace => ({
-      ...namespace,
+      namespace: namespace.namespace,
       roles: namespace.roles.slice(startIndex, endIndex)
     })).filter(namespace => namespace.roles.length > 0);
 
