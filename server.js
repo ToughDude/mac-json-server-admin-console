@@ -36,7 +36,6 @@ const validateBearerToken = (req, res, next) => {
 
 // Apply auth middlewares to admin endpoints
 server.use('/v2/organizations/:orgId/admins', validateApiKey, validateBearerToken);
-server.use('/v2/organizations/:orgId/users/:userId', validateApiKey, validateBearerToken);
 server.use('/v2/organizations/:orgId/users/:userId/roles', validateApiKey, validateBearerToken);
 server.use('/v2/organizations/:orgId/:type/:id/roles', validateApiKey, validateBearerToken);
 server.use('/v1/admin/clear-db', validateApiKey, validateBearerToken);
@@ -145,88 +144,26 @@ server.patch('/v2/organizations/:orgId/admins', (req, res) => {
 });
 
 // Add GET endpoint for fetching user roles
-server.get('/v2/organizations/:orgId/users/:userId', (req, res) => {
-  const { orgId } = req.params;
-  let { userId } = req.params;
-  const db = router.db;
-
-  try {
-    // Handle .e suffix in userId
-    if (userId.endsWith('.e')) {
-      userId = userId.slice(0, -2); // Remove the .e suffix
-    }
-
-    // Get roles from the database with correct path structure
-    const rolesPath = `organizations.${orgId}.admins.${userId}.e.MAC_ROLES`;
-    const roles = db.get(rolesPath).value();
-
-    // If no roles found, return empty arrays
-    if (!roles) {
-      return res.json({
-        id: userId,
-        type: 'users',
-        directRoles: [],
-        inheritedRoles: []
-      });
-    }
-
-    // Transform roles into the required format
-    const directRoles = [];
-    const inheritedRoles = [];
-
-    // Process each namespace and role
-    Object.entries(roles).forEach(([namespace, roleObj]) => {
-      Object.entries(roleObj).forEach(([role, value]) => {
-        if (value && value[""] === true) {
-          directRoles.push({
-            namespace,
-            role
-          });
-        }
-      });
-    });
-
-    // Add some sample inherited roles for demonstration
-    // In a real implementation, this would be based on group memberships
-    if (directRoles.length > 0) {
-      inheritedRoles.push({
-        namespace: "education",
-        role: "educator",
-        inheritedFromId: "group1",
-        inheritedFromName: "Teacher K12"
-      });
-    }
-
-    // Return the formatted response
-    res.json({
-      id: userId,
-      type: 'users',
-      directRoles,
-      inheritedRoles
-    });
-
-  } catch (error) {
-    res.status(400).json({
-      error_code: 'INVALID_REQUEST',
-      message: 'Invalid ID provided'
-    });
-  }
-});
-
-// Keep the existing /v2/organizations/:orgId/users/:userId/roles endpoint as a fallback
 server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
   const { orgId, userId } = req.params;
   const db = router.db;
 
   try {
+    // Handle .e suffix in userId if present in the path
+    let processedUserId = userId;
+    const hasESuffix = userId.endsWith('.e');
+    if (hasESuffix) {
+      processedUserId = userId.slice(0, -2); // Remove the .e suffix
+    }
+
     // Get roles from the database with correct path structure
-    const rolesPath = `organizations.${orgId}.admins.${userId}.e.MAC_ROLES`;
+    const rolesPath = `organizations.${orgId}.admins.${processedUserId}.e.MAC_ROLES`;
     const roles = db.get(rolesPath).value();
 
     // If no roles found, return empty arrays
     if (!roles) {
       return res.json({
-        id: userId,
+        id: userId, // Use original userId to preserve .e suffix if present
         type: 'users',
         directRoles: [],
         inheritedRoles: []
@@ -262,7 +199,7 @@ server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
 
     // Return the formatted response
     res.json({
-      id: userId,
+      id: userId, // Use original userId to preserve .e suffix if present
       type: 'users',
       directRoles,
       inheritedRoles
