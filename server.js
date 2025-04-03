@@ -36,6 +36,8 @@ const validateBearerToken = (req, res, next) => {
 
 // Apply auth middlewares to admin endpoints
 server.use('/v2/organizations/:orgId/admins', validateApiKey, validateBearerToken);
+server.use('/v2/organizations/:orgId/users/:userId', validateApiKey, validateBearerToken);
+server.use('/v2/organizations/:orgId/users/:userId/roles', validateApiKey, validateBearerToken);
 server.use('/v2/organizations/:orgId/:type/:id/roles', validateApiKey, validateBearerToken);
 server.use('/v1/admin/clear-db', validateApiKey, validateBearerToken);
 server.use('/v2/organizations/:orgId/roles/:namespace/:role', validateApiKey, validateBearerToken);
@@ -142,7 +144,139 @@ server.patch('/v2/organizations/:orgId/admins', (req, res) => {
   });
 });
 
-// Add GET endpoint for fetching roles
+// Add GET endpoint for fetching user roles
+server.get('/v2/organizations/:orgId/users/:userId', (req, res) => {
+  const { orgId } = req.params;
+  let { userId } = req.params;
+  const db = router.db;
+
+  try {
+    // Handle .e suffix in userId
+    if (userId.endsWith('.e')) {
+      userId = userId.slice(0, -2); // Remove the .e suffix
+    }
+
+    // Get roles from the database with correct path structure
+    const rolesPath = `organizations.${orgId}.admins.${userId}.e.MAC_ROLES`;
+    const roles = db.get(rolesPath).value();
+
+    // If no roles found, return empty arrays
+    if (!roles) {
+      return res.json({
+        id: userId,
+        type: 'users',
+        directRoles: [],
+        inheritedRoles: []
+      });
+    }
+
+    // Transform roles into the required format
+    const directRoles = [];
+    const inheritedRoles = [];
+
+    // Process each namespace and role
+    Object.entries(roles).forEach(([namespace, roleObj]) => {
+      Object.entries(roleObj).forEach(([role, value]) => {
+        if (value && value[""] === true) {
+          directRoles.push({
+            namespace,
+            role
+          });
+        }
+      });
+    });
+
+    // Add some sample inherited roles for demonstration
+    // In a real implementation, this would be based on group memberships
+    if (directRoles.length > 0) {
+      inheritedRoles.push({
+        namespace: "education",
+        role: "educator",
+        inheritedFromId: "group1",
+        inheritedFromName: "Teacher K12"
+      });
+    }
+
+    // Return the formatted response
+    res.json({
+      id: userId,
+      type: 'users',
+      directRoles,
+      inheritedRoles
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      error_code: 'INVALID_REQUEST',
+      message: 'Invalid ID provided'
+    });
+  }
+});
+
+// Keep the existing /v2/organizations/:orgId/users/:userId/roles endpoint as a fallback
+server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
+  const { orgId, userId } = req.params;
+  const db = router.db;
+
+  try {
+    // Get roles from the database with correct path structure
+    const rolesPath = `organizations.${orgId}.admins.${userId}.e.MAC_ROLES`;
+    const roles = db.get(rolesPath).value();
+
+    // If no roles found, return empty arrays
+    if (!roles) {
+      return res.json({
+        id: userId,
+        type: 'users',
+        directRoles: [],
+        inheritedRoles: []
+      });
+    }
+
+    // Transform roles into the required format
+    const directRoles = [];
+    const inheritedRoles = [];
+
+    // Process each namespace and role
+    Object.entries(roles).forEach(([namespace, roleObj]) => {
+      Object.entries(roleObj).forEach(([role, value]) => {
+        if (value && value[""] === true) {
+          directRoles.push({
+            namespace,
+            role
+          });
+        }
+      });
+    });
+
+    // Add some sample inherited roles for demonstration
+    // In a real implementation, this would be based on group memberships
+    if (directRoles.length > 0) {
+      inheritedRoles.push({
+        namespace: "education",
+        role: "educator",
+        inheritedFromId: "group1",
+        inheritedFromName: "Teacher K12"
+      });
+    }
+
+    // Return the formatted response
+    res.json({
+      id: userId,
+      type: 'users',
+      directRoles,
+      inheritedRoles
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      error_code: 'INVALID_REQUEST',
+      message: 'Invalid ID provided'
+    });
+  }
+});
+
+// Add GET endpoint for fetching roles with type parameter
 server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
   const { orgId, type, id } = req.params;
   const db = router.db;
@@ -157,7 +291,7 @@ server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
 
   try {
     // Get roles from the database with correct path structure
-    const rolesPath = `organizations.${orgId}.admins.${id}.MAC_ROLES`;
+    const rolesPath = `organizations.${orgId}.admins.${id}.e.MAC_ROLES`;
     const roles = db.get(rolesPath).value();
 
     // If no roles found, return empty arrays
@@ -185,6 +319,17 @@ server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
         }
       });
     });
+
+    // Add some sample inherited roles for demonstration
+    // In a real implementation, this would be based on group memberships
+    if (directRoles.length > 0) {
+      inheritedRoles.push({
+        namespace: "education",
+        role: "educator",
+        inheritedFromId: "group1",
+        inheritedFromName: "Teacher K12"
+      });
+    }
 
     // Return the formatted response
     res.json({
@@ -320,7 +465,7 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     const roleCounts = {
       education: {
         educator: { users: 80, groups: 2 },
-        member: { users: 1200, groups: 8 }
+        member: { users: 150, groups: 5 }
       },
       organization: {
         member: { users: 1200, groups: 8 }
@@ -355,6 +500,13 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
             description: "Can create, edit, and delete classrooms.",
             userCount: roleCounts.education.educator.users,
             userGroupCount: roleCounts.education.educator.groups,
+            visible: true
+          },
+          {
+            code: "member",
+            description: "Can view and access educational content.",
+            userCount: 150,
+            userGroupCount: 5,
             visible: true
           }
         ]

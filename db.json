@@ -27,7 +27,12 @@
         "39B41A6067D7F3680A494216@39b31a6067d7f368494216": {
           "e": {
             "MAC_ROLES": {
-              "education": {}
+              "education": {},
+              "Education": {
+                "educator": {
+                  "": true
+                }
+              }
             }
           }
         }
