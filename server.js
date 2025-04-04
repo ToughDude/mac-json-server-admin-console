@@ -188,14 +188,15 @@ server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
 
     // Add some sample inherited roles for demonstration
     // In a real implementation, this would be based on group memberships
-    if (directRoles.length > 0) {
-      inheritedRoles.push({
-        namespace: "education",
-        role: "educator",
-        inheritedFromId: "group1",
-        inheritedFromName: "Teacher K12"
-      });
-    }
+    // TODO: commented only for testing purposes
+    // if (directRoles.length > 0) {
+    //   inheritedRoles.push({
+    //     namespace: "education",
+    //     role: "educator",
+    //     inheritedFromId: "group1",
+    //     inheritedFromName: "Teacher K12"
+    //   });
+    // }
 
     // Return the formatted response
     res.json({
