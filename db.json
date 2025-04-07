@@ -32,7 +32,11 @@
                   "": true
                 }
               },
-              "Education": {}
+              "Education": {
+                "educator": {
+                  "": true
+                }
+              }
             }
           }
         }

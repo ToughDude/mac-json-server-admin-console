@@ -392,9 +392,9 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     }
 
     // Explicitly throw 500 error for testing
-    // if (req.query.forceError === 'true') {
-    //   throw new Error('Forced server error for testing');
-    // }
+    if (req.query.forceError === 'true') {
+      throw new Error('Forced server error for testing');
+    }
 
     // Get all admin roles from the database
     const admins = db.get(`organizations.${orgId}.admins`).value() || {};
@@ -577,6 +577,96 @@ server.delete('/v2/organizations/:orgId/roles/:namespace/:role', (req, res) => {
       status: 'error',
       message: 'Failed to remove role',
       error: error.message
+    });
+  }
+});
+
+// Add GET endpoint for fetching users/user-groups for a specific role
+server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, res) => {
+  const { orgId, namespace, role } = req.params;
+  const { continuation_token, page_size = 10 } = req.query;
+  const db = router.db;
+
+  try {
+    // Get all admins from the organization
+    const admins = db.get(`organizations.${orgId}.admins`).value() || {};
+    
+    // Filter admins who have the specified role
+    const assignees = [];
+    let currentPage = 0;
+    let token = null;
+
+    // If continuation token is provided, decode it to get the current page
+    if (continuation_token) {
+      try {
+        const decoded = Buffer.from(continuation_token, 'base64').toString('utf8');
+        currentPage = parseInt(decoded);
+      } catch (error) {
+        return res.status(400).json({
+          error_code: 'INVALID_REQUEST',
+          message: 'Invalid continuation token'
+        });
+      }
+    }
+
+    // Process each admin
+    Object.entries(admins).forEach(([userId, adminData]) => {
+      const roles = adminData?.e?.MAC_ROLES || {};
+      if (roles[namespace]?.[role]?.[""] === true) {
+        // Add user details
+        assignees.push({
+          id: `${userId}.e`,
+          firstName: "first", // Placeholder - would come from Renga API
+          lastName: "last", // Placeholder - would come from Renga API
+          type: "TYPE2E",
+          email: `${userId}@adobe.com`, // Placeholder - would come from Renga API
+          userName: `${userId}@adobe.com`, // Placeholder - would come from Renga API
+          authenticatingAccountType: "AdobeID",
+          authenticatingAccount: {
+            id: `${userId}@AdobeID`,
+            type: "TYPE1",
+            editable: false,
+            externallyManaged: false,
+            directoryId: "WCD",
+            storageReclamationAction: "ARCHIVE"
+          }
+        });
+      }
+    });
+
+    // Add some sample user groups (would come from Renga API)
+    if (assignees.length > 0) {
+      assignees.push({
+        id: "546742215",
+        name: "abc",
+        type: "USER_GROUP",
+        userCount: 2
+      });
+    }
+
+    // Calculate pagination
+    const startIndex = currentPage * page_size;
+    const endIndex = startIndex + page_size;
+    const paginatedAssignees = assignees.slice(startIndex, endIndex);
+
+    // Generate next continuation token if there are more results
+    if (endIndex < assignees.length) {
+      token = Buffer.from((currentPage + 1).toString()).toString('base64');
+    }
+
+    // Set continuation token header if available
+    if (token) {
+      res.setHeader('x-continuation-token', token);
+    }
+
+    // Return the paginated results
+    res.json(paginatedAssignees);
+
+  } catch (error) {
+    console.error('Error fetching assignees:', error);
+    res.status(500).json({
+      error_code: 'INTERNAL_SERVER_ERROR',
+      message: 'An error occurred while fetching assignees'
     });
   }
 });
