@@ -392,9 +392,9 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
     }
 
     // Explicitly throw 500 error for testing
-    if (req.query.forceError === 'true') {
-      throw new Error('Forced server error for testing');
-    }
+    // if (req.query.forceError === 'true') {
+    //   throw new Error('Forced server error for testing');
+    // }
 
     // Get all admin roles from the database
     const admins = db.get(`organizations.${orgId}.admins`).value() || {};
@@ -508,7 +508,7 @@ server.get('/v2/organizations/:orgId/roles', (req, res) => {
 
     // Apply pagination to roles within each namespace
     response = response.map(namespace => ({
-      namespace: namespace.namespace,
+        namespace: namespace.namespace,
       roles: namespace.roles.slice(startIndex, endIndex)
     })).filter(namespace => namespace.roles.length > 0);
 
@@ -588,20 +588,33 @@ server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, re
   const db = router.db;
 
   try {
+    console.log('Request received with continuation_token:', continuation_token);
+    
     // Get all admins from the organization
     const admins = db.get(`organizations.${orgId}.admins`).value() || {};
     
-    // Filter admins who have the specified role
-    const assignees = [];
+    // Initialize arrays for different types of assignees
+    const userAssignees = [];
+    const groupAssignees = [
+      { id: "546742215", name: "abc", type: "USER_GROUP", userCount: 2 },
+      { id: "546742216", name: "def", type: "USER_GROUP", userCount: 3 },
+      { id: "546742217", name: "ghi", type: "USER_GROUP", userCount: 4 },
+      { id: "546742218", name: "jkl", type: "USER_GROUP", userCount: 5 },
+      { id: "546742219", name: "mno", type: "USER_GROUP", userCount: 6 },
+      { id: "546742220", name: "pqr", type: "USER_GROUP", userCount: 7 }
+    ];
+    
     let currentPage = 0;
-    let token = null;
 
     // If continuation token is provided, decode it to get the current page
     if (continuation_token) {
       try {
         const decoded = Buffer.from(continuation_token, 'base64').toString('utf8');
+        console.log('Decoded continuation token:', decoded);
         currentPage = parseInt(decoded);
+        console.log('Current page:', currentPage);
       } catch (error) {
+        console.error('Error decoding continuation token:', error);
         return res.status(400).json({
           error_code: 'INVALID_REQUEST',
           message: 'Invalid continuation token'
@@ -614,7 +627,7 @@ server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, re
       const roles = adminData?.e?.MAC_ROLES || {};
       if (roles[namespace]?.[role]?.[""] === true) {
         // Add user details
-        assignees.push({
+        userAssignees.push({
           id: `${userId}.e`,
           firstName: "first", // Placeholder - would come from Renga API
           lastName: "last", // Placeholder - would come from Renga API
@@ -634,31 +647,61 @@ server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, re
       }
     });
 
-    // Add some sample user groups (would come from Renga API)
-    if (assignees.length > 0) {
-      assignees.push({
-        id: "546742215",
-        name: "abc",
-        type: "USER_GROUP",
-        userCount: 2
-      });
-    }
-
+    // Combine all assignees, putting users first
+    const allAssignees = [...userAssignees, ...groupAssignees];
+    
     // Calculate pagination
-    const startIndex = currentPage * page_size;
-    const endIndex = startIndex + page_size;
-    const paginatedAssignees = assignees.slice(startIndex, endIndex);
+    const parsedPageSize = parseInt(page_size);
+    const startIndex = currentPage * parsedPageSize;
+    const endIndex = startIndex + parsedPageSize;
+    const paginatedAssignees = allAssignees.slice(startIndex, endIndex);
+    const totalItems = allAssignees.length;
+    const totalPages = Math.ceil(totalItems / parsedPageSize);
+    const displayPage = currentPage + 1;
 
-    // Generate next continuation token if there are more results
-    if (endIndex < assignees.length) {
-      token = Buffer.from((currentPage + 1).toString()).toString('base64');
+    console.log('Debug pagination:', {
+      currentPage,
+      displayPage,
+      totalPages,
+      startIndex,
+      endIndex,
+      totalItems,
+      paginatedAssigneesLength: paginatedAssignees.length,
+      allAssigneesLength: allAssignees.length
+    });
+
+    // Check if we're on the last page
+    const hasNextPage = displayPage < totalPages;
+    let nextToken = null;
+    if (hasNextPage) {
+      nextToken = Buffer.from(displayPage.toString()).toString('base64');
+      console.log('Generated next token:', nextToken);
     }
 
-    // Set continuation token header if available
-    if (token) {
-      res.setHeader('x-continuation-token', token);
-    }
+    console.log('Final pagination state:', {
+      hasNextPage,
+      nextToken,
+      displayPage,
+      totalPages
+    });
 
+    // Set all required headers
+    res.setHeader('Access-Control-Expose-Headers', 
+      'X-Current-Page, X-Has-Next-Page, X-Next-Page, X-Page-Count, X-Page-Size, X-Total-Count, X-Request-Id, X-Debug-Facade-Endpoint-Matched');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Expires', '-1');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Current-Page', displayPage);
+    res.setHeader('X-Has-Next-Page', hasNextPage);
+    res.setHeader('X-Next-Page', nextToken || '');
+    res.setHeader('X-Page-Count', totalPages);
+    res.setHeader('X-Page-Size', parsedPageSize);
+    res.setHeader('X-Total-Count', totalItems);
+    res.setHeader('X-Request-Id', req.headers['x-request-id'] || 'default-request-id');
+    res.setHeader('X-Debug-Facade-Endpoint-Matched', 'jil-orgs');
+
+    console.log('Sending response with paginatedAssignees:', paginatedAssignees);
     // Return the paginated results
     res.json(paginatedAssignees);
 
