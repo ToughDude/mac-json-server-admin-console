@@ -24,6 +24,15 @@
   "organizations": {
     "38811A2C67D7F3390A49421E@AdobeOrg": {
       "admins": {
+        "632909040": {
+          "MAC_ROLES": {
+            "Education": {
+              "educator": {
+                "": true
+              }
+            }
+          }
+        },
         "39B41A6067D7F3680A494216@39b31a6067d7f368494216": {
           "e": {
             "MAC_ROLES": {
@@ -37,6 +46,13 @@
                   "": true
                 }
               }
+            }
+          }
+        },
+        "8E231C3167DD3DFD0A494230@39b31a6067d7f368494216": {
+          "e": {
+            "MAC_ROLES": {
+              "education": {}
             }
           }
         }
