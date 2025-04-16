@@ -1,0 +1,104 @@
+{
+    "organizations": {
+    "38811A2C67D7F3390A49421E@AdobeOrg": {
+      "roles": {
+        "education": {
+          "educator": {
+            "capabilities": [
+              {
+                "code": "classroom/create",
+                "value": true,
+                "configurable": true,
+                "visible": true
+              },
+              {
+                "code": "classroom/manage",
+                "value": true,
+                "configurable": true,
+                "visible": true
+              },
+              {
+                "code": "comment",
+                "value": true,
+                "configurable": true,
+                "visible": true
+              }
+            ]
+          }
+        }
+      },
+      "userGroups": {
+        "632909040": [
+          {
+              "namespace": "education",
+              "role": "educator"
+          }
+      ]
+      },
+      "admins": {
+        "632909040": {
+          "MAC_ROLES": {
+            "Education": {
+              "educator": {
+                "": true
+              }
+            }
+          }
+        },
+        "39B41A6067D7F3680A494216@39b31a6067d7f368494216": {
+          "e": {
+            "MAC_ROLES": {
+              "education": {
+                "educator": {
+                  "": true
+                }
+              },
+              "Education": {
+                "educator": {
+                  "": true
+                }
+              }
+            }
+          }
+        },
+        "8E231C3167DD3DFD0A494230@39b31a6067d7f368494216": {
+          "e": {
+            "MAC_ROLES": {
+              "education": {},
+              "Education": {
+                "educator": {
+                  "": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "education": {
+        "educator": {
+          "capabilities": [
+            {
+              "code": "classroom/create",
+              "value": true,
+              "configurable": true,
+              "visible": true
+            },
+            {
+              "code": "classroom/manage",
+              "value": true,
+              "configurable": true,
+              "visible": true
+            },
+            {
+              "code": "comment",
+              "value": true,
+              "configurable": true,
+              "visible": true
+            }
+          ]
+        }
+      },
+      "capabilities": []
+    }
+  }
+}

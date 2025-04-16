@@ -160,25 +160,19 @@ server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
     const rolesPath = `organizations.${orgId}.admins.${processedUserId}.e.MAC_ROLES`;
     const roles = db.get(rolesPath).value();
 
-    // If no roles found, return empty arrays
+    // If no roles found, return empty array
     if (!roles) {
-      return res.json({
-        id: userId, // Use original userId to preserve .e suffix if present
-        type: 'users',
-        directRoles: [],
-        inheritedRoles: []
-      });
+      return res.json([]);
     }
 
     // Transform roles into the required format
-    const directRoles = [];
-    const inheritedRoles = [];
+    const allRoles = [];
 
-    // Process each namespace and role
+    // Process each namespace and role for direct roles
     Object.entries(roles).forEach(([namespace, roleObj]) => {
       Object.entries(roleObj).forEach(([role, value]) => {
         if (value && value[""] === true) {
-          directRoles.push({
+          allRoles.push({
             namespace,
             role
           });
@@ -186,25 +180,19 @@ server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
       });
     });
 
-    // Add some sample inherited roles for demonstration
-    // In a real implementation, this would be based on group memberships
-    // TODO: commented only for testing purposes
-    // if (directRoles.length > 0) {
-    //   inheritedRoles.push({
-    //     namespace: "education",
-    //     role: "educator",
-    //     inheritedFromId: "group1",
-    //     inheritedFromName: "Teacher K12"
-    //   });
-    // }
+    // Add inherited roles
+    if (allRoles.length > 0) {
+      allRoles.push({
+        namespace: "education",
+        role: "educator",
+        sourceId: "group1",
+        sourceName: "Teacher K12",
+        sourceType: "USER_GROUP"
+      });
+    }
 
     // Return the formatted response
-    res.json({
-      id: userId, // Use original userId to preserve .e suffix if present
-      type: 'users',
-      directRoles,
-      inheritedRoles
-    });
+    res.json(allRoles);
 
   } catch (error) {
     res.status(400).json({
@@ -215,75 +203,75 @@ server.get('/v2/organizations/:orgId/users/:userId/roles', (req, res) => {
 });
 
 // Add GET endpoint for fetching roles with type parameter
-server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
-  const { orgId, type, id } = req.params;
-  const db = router.db;
+// server.get('/v2/organizations/:orgId/:type/:id/roles', (req, res) => {
+//   const { orgId, type, id } = req.params;
+//   const db = router.db;
 
-  // Validate type parameter
-  if (!['USER', 'GROUP'].includes(type.toUpperCase())) {
-    return res.status(400).json({
-      error_code: 'INVALID_REQUEST',
-      message: 'Invalid type provided. Must be USER or GROUP'
-    });
-  }
+//   // Validate type parameter
+//   if (!['USER', 'GROUP'].includes(type.toUpperCase())) {
+//     return res.status(400).json({
+//       error_code: 'INVALID_REQUEST',
+//       message: 'Invalid type provided. Must be USER or GROUP'
+//     });
+//   }
 
-  try {
-    // Get roles from the database with correct path structure
-    const rolesPath = `organizations.${orgId}.admins.${id}.e.MAC_ROLES`;
-    const roles = db.get(rolesPath).value();
+//   try {
+//     // Get roles from the database with correct path structure
+//     const rolesPath = `organizations.${orgId}.admins.${id}.e.MAC_ROLES`;
+//     const roles = db.get(rolesPath).value();
 
-    // If no roles found, return empty arrays
-    if (!roles) {
-      return res.json({
-        id,
-        type: type.toLowerCase() === 'user' ? 'users' : 'groups',
-        directRoles: [],
-        inheritedRoles: []
-      });
-    }
+//     // If no roles found, return empty arrays
+//     if (!roles) {
+//       return res.json({
+//         id,
+//         type: type.toLowerCase() === 'user' ? 'users' : 'groups',
+//         directRoles: [],
+//         inheritedRoles: []
+//       });
+//     }
 
-    // Transform roles into the required format
-    const directRoles = [];
-    const inheritedRoles = [];
+//     // Transform roles into the required format
+//     const directRoles = [];
+//     const inheritedRoles = [];
 
-    // Process each namespace and role
-    Object.entries(roles).forEach(([namespace, roleObj]) => {
-      Object.entries(roleObj).forEach(([role, value]) => {
-        if (value && value[""] === true) {
-          directRoles.push({
-            namespace,
-            role
-          });
-        }
-      });
-    });
+//     // Process each namespace and role
+//     Object.entries(roles).forEach(([namespace, roleObj]) => {
+//       Object.entries(roleObj).forEach(([role, value]) => {
+//         if (value && value[""] === true) {
+//           directRoles.push({
+//             namespace,
+//             role
+//           });
+//         }
+//       });
+//     });
 
-    // Add some sample inherited roles for demonstration
-    // In a real implementation, this would be based on group memberships
-    if (directRoles.length > 0) {
-      inheritedRoles.push({
-        namespace: "education",
-        role: "educator",
-        inheritedFromId: "group1",
-        inheritedFromName: "Teacher K12"
-      });
-    }
+//     // Add some sample inherited roles for demonstration
+//     // In a real implementation, this would be based on group memberships
+//     if (directRoles.length > 0) {
+//       inheritedRoles.push({
+//         namespace: "education",
+//         role: "educator",
+//         inheritedFromId: "group1",
+//         inheritedFromName: "Teacher K12"
+//       });
+//     }
 
-    // Return the formatted response
-    res.json({
-      id,
-      type: type.toLowerCase() === 'user' ? 'users' : 'groups',
-      directRoles,
-      inheritedRoles
-    });
+//     // Return the formatted response
+//     res.json({
+//       id,
+//       type: type.toLowerCase() === 'user' ? 'users' : 'groups',
+//       directRoles,
+//       inheritedRoles
+//     });
 
-  } catch (error) {
-    res.status(400).json({
-      error_code: 'INVALID_REQUEST',
-      message: 'Invalid ID provided'
-    });
-  }
-});
+//   } catch (error) {
+//     res.status(400).json({
+//       error_code: 'INVALID_REQUEST',
+//       message: 'Invalid ID provided'
+//     });
+//   }
+// });
 
 // Add endpoint to clear database
 server.post('/v1/admin/clear-db', (req, res) => {
@@ -596,7 +584,7 @@ server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, re
     // Initialize arrays for different types of assignees
     const userAssignees = [];
     const groupAssignees = [
-      { id: "546742215", name: "abc", type: "USER_GROUP", userCount: 2 },
+      { id: "640491378", name: "abc", type: "USER_GROUP", userCount: 2 },
       { id: "546742216", name: "def", type: "USER_GROUP", userCount: 3 },
       { id: "546742217", name: "ghi", type: "USER_GROUP", userCount: 4 },
       { id: "546742218", name: "jkl", type: "USER_GROUP", userCount: 5 },
@@ -710,6 +698,46 @@ server.get('/v2/organizations/:orgId/roles/:namespace/:role/assignees', (req, re
     res.status(500).json({
       error_code: 'INTERNAL_SERVER_ERROR',
       message: 'An error occurred while fetching assignees'
+    });
+  }
+});
+
+server.get('/v2/organizations/:orgId/user-groups/:id/roles', (req, res) => {
+  const { orgId, type, id } = req.params;
+  const db = router.db;
+ 
+  try {
+    // Get roles from the database with correct path structure
+    const rolesPath = `organizations.${orgId}.userGroups.${id}.roles`;
+    const roles = db.get(rolesPath).value();
+ 
+    // If no roles found, return empty arrays
+    if (!roles) {
+      return res.json([
+        {
+            "namespace": "education",
+            "role": "educator"
+        }
+    ]);
+    }
+ 
+    // Transform roles into the required format
+ 
+    // Process each role
+ 
+ 
+    // Return the formatted response
+    res.json([
+      {
+          "namespace": "education",
+          "role": "educator"
+      }
+  ]);
+ 
+  } catch (error) {
+    res.status(400).json({
+      error_code: 'INVALID_REQUEST',
+      message: 'Invalid ID provided'
     });
   }
 });
